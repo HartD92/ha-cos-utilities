@@ -1,0 +1,13 @@
+{
+  "domain": "csu",
+  "name": "Colorado Springs Utilities",
+  "codeowners": ["@hartd92"],
+  "config_flow": true,
+  "dependencies": ["recorder"],
+  "documentation": "https://www.home-assistant.io/integrations/csu",
+  "homekit": {},
+  "iot_class": "cloud_polling",
+  "requirements": [],
+  "ssdp": [],
+  "zeroconf": []
+}
