@@ -1,25 +1,25 @@
 """Test HA COS Utilities config flow."""
 from unittest.mock import patch
 
-import pytest
-from custom_components.ha_cos_utilities.const import (
+import pytest # type: ignore
+from custom_components.ha_cos_utilities.const import ( # type: ignore
     BINARY_SENSOR,
 )
-from custom_components.ha_cos_utilities.const import (
+from custom_components.ha_cos_utilities.const import ( # type: ignore
     DOMAIN,
 )
-from custom_components.ha_cos_utilities.const import (
+from custom_components.ha_cos_utilities.const import ( # type: ignore
     PLATFORMS,
 )
-from custom_components.ha_cos_utilities.const import (
+from custom_components.ha_cos_utilities.const import ( # type: ignore
     SENSOR,
 )
-from custom_components.ha_cos_utilities.const import (
+from custom_components.ha_cos_utilities.const import ( # type: ignore
     SWITCH,
 )
-from homeassistant import config_entries
-from homeassistant import data_entry_flow
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from homeassistant import config_entries # type: ignore
+from homeassistant import data_entry_flow # type: ignore
+from pytest_homeassistant_custom_component.common import MockConfigEntry # type: ignore
 
 from .const import MOCK_CONFIG
 
@@ -30,7 +30,10 @@ from .const import MOCK_CONFIG
 @pytest.fixture(autouse=True)
 def bypass_setup_fixture():
     """Prevent setup."""
-    with patch("custom_components.ha_cos_utilities.async_setup", return_value=True,), patch(
+    with patch(
+        "custom_components.ha_cos_utilities.async_setup",
+        return_value=True
+    ), patch(
         "custom_components.ha_cos_utilities.async_setup_entry",
         return_value=True,
     ):

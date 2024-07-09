@@ -1,27 +1,38 @@
 """Coordinator for CSU data."""
 
-from datetime import datetime, timedelta
 import logging
+from datetime import datetime
+from datetime import timedelta
 from types import MappingProxyType
-from typing import Any, cast
+from typing import Any
+from typing import cast
 
-from homeassistant.components.recorder import get_instance
-from homeassistant.components.recorder.models import StatisticData, StatisticMetaData
-from homeassistant.components.recorder.statistics import (
-    async_add_external_statistics,
-    get_last_statistics,
-    statistics_during_period,
-    valid_statistic_id,
-)
-from homeassistant.const import CONF_PASSWORD, CONF_USERNAME, UnitOfEnergy, UnitOfVolume
-from homeassistant.core import HomeAssistant, callback
-from homeassistant.exceptions import ConfigEntryAuthFailed
-from homeassistant.helpers import aiohttp_client
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
-from homeassistant.util import dt as dt_util
+from homeassistant.components.recorder import get_instance # type: ignore
+from homeassistant.components.recorder.models import StatisticData # type: ignore
+from homeassistant.components.recorder.models import StatisticMetaData # type: ignore
+from homeassistant.components.recorder.statistics import async_add_external_statistics # type: ignore
+from homeassistant.components.recorder.statistics import get_last_statistics # type: ignore
+from homeassistant.components.recorder.statistics import statistics_during_period # type: ignore
+from homeassistant.components.recorder.statistics import valid_statistic_id # type: ignore
+from homeassistant.const import CONF_PASSWORD # type: ignore
+from homeassistant.const import CONF_USERNAME # type: ignore
+from homeassistant.const import UnitOfEnergy # type: ignore
+from homeassistant.const import UnitOfVolume # type: ignore
+from homeassistant.core import HomeAssistant # type: ignore
+from homeassistant.core import callback # type: ignore
+from homeassistant.exceptions import ConfigEntryAuthFailed # type: ignore
+from homeassistant.helpers import aiohttp_client # type: ignore
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator # type: ignore
+from homeassistant.util import dt as dt_util # type: ignore
 
-from .const import DOMAIN, TIME_ZONE
-from .csu import CSU, AggregateType, Meter, MeterType, ReadResolution, UsageRead
+from .const import DOMAIN
+from .const import TIME_ZONE
+from .csu import CSU
+from .csu import AggregateType
+from .csu import Meter
+from .csu import MeterType
+from .csu import ReadResolution
+from .csu import UsageRead
 from .exceptions import InvalidAuth
 
 _LOGGER = logging.getLogger(__name__)
@@ -48,6 +59,14 @@ class CsuCoordinator(DataUpdateCoordinator[dict[str, UsageRead]]):
             entry_data[CONF_USERNAME],
             entry_data[CONF_PASSWORD],
         )
+        self.entities = []
+        self.data = {
+            "monthly_totals": {
+                "ELEC": {"usage": None},
+                "GAS": {"usage": None},
+                "WATER": {"usage": None},
+            }
+        }
 
         @callback
         def _dummy_listener() -> None:
@@ -69,12 +88,23 @@ class CsuCoordinator(DataUpdateCoordinator[dict[str, UsageRead]]):
         # That will let us make the sensors.
         # usage_reads: list[UsageRead] = await self.api.async_get_usage_reads()
         # _LOGGER.debug("Updating sensor data with: %s", usage_reads)
+        if not self.api.meters:
+            await self.api.async_get_meters()
+        for meter in self.api.meters:
+            start_time = datetime.today().replace(day=1)
+            end_time = datetime.today()
+            sum_usage = 0.0
+            usage_reads = await self.api.async_get_usage_reads(meter, AggregateType.DAY, start_time, end_time)
+            for usage_read in usage_reads:
+                sum_usage += usage_read.consumption
+            self.data["monthly_totals"][meter.meter_type.name]["usage"] = sum_usage
+
         await self._insert_statistics()
 
     async def _insert_statistics(self) -> None:
         """Insert CSU Statistics."""
-
-        await self.api.async_get_meters()
+        if not self.api.meters:
+            await self.api.async_get_meters()
         for meter in self.api.meters:
             id_prefix = (
                 f"csu_{meter.meter_type.name.lower()}_{meter.customer.customer_id}"
@@ -174,7 +204,6 @@ class CsuCoordinator(DataUpdateCoordinator[dict[str, UsageRead]]):
         We read at different resolutions depending on age:
         - day resolution for past 3 years
         - hour resolution for past 2 months
-        - maybe quarter hour for elec?
         """
 
         def _update_with_finer_usage_reads(

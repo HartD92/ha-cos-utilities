@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import Platform
-from homeassistant.core import HomeAssistant
+from homeassistant.config_entries import ConfigEntry # type: ignore
+from homeassistant.const import Platform # type: ignore
+from homeassistant.core import HomeAssistant # type: ignore
 
 from .const import DOMAIN
 from .coordinator import CsuCoordinator

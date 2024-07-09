@@ -1,19 +1,22 @@
 """Colorado Springs Utilities API."""
 
 import dataclasses
-from datetime import datetime, timedelta
-from enum import Enum
 import json
 import logging
+from datetime import datetime
+from datetime import timedelta
+from enum import Enum
 from typing import Any
 
 import aiohttp
-from aiohttp.client_exceptions import ClientResponseError
 import arrow
+from aiohttp.client_exceptions import ClientResponseError
 from dateutil import tz
 
-from .const import TIME_ZONE, USER_AGENT
-from .exceptions import CannotConnect, InvalidAuth
+from .const import TIME_ZONE
+from .const import USER_AGENT
+from .exceptions import CannotConnect
+from .exceptions import InvalidAuth
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -121,8 +124,8 @@ class CSU:
         self.username = username
         self.password = password
         self.access_token = ""
-        self.customers = [CsuCustomer]
-        self.meters = [Meter]
+        self.customers = []
+        self.meters = []
 
     async def async_login(self) -> None:
         """Login to the API."""
@@ -278,7 +281,7 @@ class CSU:
         DEN = tz.gettz(TIME_ZONE)
 
         # Home Assistant recorder will only allow hourly updates. We aggregate the 15m reads to hourly here.
-        if meter.meter_type == MeterType.ELEC:
+        if meter.meter_type == MeterType.ELEC and aggregate_type == AggregateType.HOUR :
             aggConsumption = 0.0
             for read in reads:
                 if read[meterReadField] is not None:
@@ -321,6 +324,8 @@ class CSU:
                             readStart = datetime.fromisoformat(
                                 read[meterReadField]
                             ).replace(tzinfo=DEN) - timedelta(hours=1)
+                    elif aggregate_type == AggregateType.DAY:
+                        readStart = readStart + timedelta(days=1)
                     result.append(
                         UsageRead(
                             meter=meter,

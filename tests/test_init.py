@@ -1,22 +1,22 @@
 """Test HA COS Utilities setup process."""
-import pytest
-from custom_components.ha_cos_utilities import (
+import pytest # type: ignore
+from custom_components.ha_cos_utilities import ( # type: ignore
     async_reload_entry,
 )
-from custom_components.ha_cos_utilities import (
+from custom_components.ha_cos_utilities import ( # type: ignore
     async_setup_entry,
 )
-from custom_components.ha_cos_utilities import (
+from custom_components.ha_cos_utilities import ( # type: ignore
     async_unload_entry,
 )
-from custom_components.ha_cos_utilities import (
+from custom_components.ha_cos_utilities import ( # type: ignore
     CSUDataUpdateCoordinator,
 )
-from custom_components.ha_cos_utilities.const import (
+from custom_components.ha_cos_utilities.const import ( # type: ignore
     DOMAIN,
 )
-from homeassistant.exceptions import ConfigEntryNotReady
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from homeassistant.exceptions import ConfigEntryNotReady # type: ignore
+from pytest_homeassistant_custom_component.common import MockConfigEntry # type: ignore
 
 from .const import MOCK_CONFIG
 
@@ -36,16 +36,12 @@ async def test_setup_unload_and_reload_entry(hass, bypass_get_data):
     # call, no code from custom_components/ha_cos_utilities/api.py actually runs.
     assert await async_setup_entry(hass, config_entry)
     assert DOMAIN in hass.data and config_entry.entry_id in hass.data[DOMAIN]
-    assert (
-        type(hass.data[DOMAIN][config_entry.entry_id]) == CSUDataUpdateCoordinator
-    )
+    assert type(hass.data[DOMAIN][config_entry.entry_id]) is CSUDataUpdateCoordinator
 
     # Reload the entry and assert that the data from above is still there
     assert await async_reload_entry(hass, config_entry) is None
     assert DOMAIN in hass.data and config_entry.entry_id in hass.data[DOMAIN]
-    assert (
-        type(hass.data[DOMAIN][config_entry.entry_id]) == CSUDataUpdateCoordinator
-    )
+    assert type(hass.data[DOMAIN][config_entry.entry_id]) is CSUDataUpdateCoordinator
 
     # Unload the entry and verify that the data has been removed
     assert await async_unload_entry(hass, config_entry)
