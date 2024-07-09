@@ -7,23 +7,23 @@ from types import MappingProxyType
 from typing import Any
 from typing import cast
 
-from homeassistant.components.recorder import get_instance # type: ignore
-from homeassistant.components.recorder.models import StatisticData # type: ignore
-from homeassistant.components.recorder.models import StatisticMetaData # type: ignore
-from homeassistant.components.recorder.statistics import async_add_external_statistics # type: ignore
-from homeassistant.components.recorder.statistics import get_last_statistics # type: ignore
-from homeassistant.components.recorder.statistics import statistics_during_period # type: ignore
-from homeassistant.components.recorder.statistics import valid_statistic_id # type: ignore
-from homeassistant.const import CONF_PASSWORD # type: ignore
-from homeassistant.const import CONF_USERNAME # type: ignore
-from homeassistant.const import UnitOfEnergy # type: ignore
-from homeassistant.const import UnitOfVolume # type: ignore
-from homeassistant.core import HomeAssistant # type: ignore
-from homeassistant.core import callback # type: ignore
-from homeassistant.exceptions import ConfigEntryAuthFailed # type: ignore
-from homeassistant.helpers import aiohttp_client # type: ignore
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator # type: ignore
-from homeassistant.util import dt as dt_util # type: ignore
+from homeassistant.components.recorder import get_instance  # type: ignore
+from homeassistant.components.recorder.models import StatisticData  # type: ignore
+from homeassistant.components.recorder.models import StatisticMetaData  # type: ignore
+from homeassistant.components.recorder.statistics import async_add_external_statistics  # type: ignore
+from homeassistant.components.recorder.statistics import get_last_statistics  # type: ignore
+from homeassistant.components.recorder.statistics import statistics_during_period  # type: ignore
+from homeassistant.components.recorder.statistics import valid_statistic_id  # type: ignore
+from homeassistant.const import CONF_PASSWORD  # type: ignore
+from homeassistant.const import CONF_USERNAME  # type: ignore
+from homeassistant.const import UnitOfEnergy  # type: ignore
+from homeassistant.const import UnitOfVolume  # type: ignore
+from homeassistant.core import HomeAssistant  # type: ignore
+from homeassistant.core import callback  # type: ignore
+from homeassistant.exceptions import ConfigEntryAuthFailed  # type: ignore
+from homeassistant.helpers import aiohttp_client  # type: ignore
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator  # type: ignore
+from homeassistant.util import dt as dt_util  # type: ignore
 
 from .const import DOMAIN
 from .const import TIME_ZONE
@@ -94,7 +94,9 @@ class CsuCoordinator(DataUpdateCoordinator[dict[str, UsageRead]]):
             start_time = datetime.today().replace(day=1)
             end_time = datetime.today()
             sum_usage = 0.0
-            usage_reads = await self.api.async_get_usage_reads(meter, AggregateType.DAY, start_time, end_time)
+            usage_reads = await self.api.async_get_usage_reads(
+                meter, AggregateType.DAY, start_time, end_time
+                )
             for usage_read in usage_reads:
                 sum_usage += usage_read.consumption
             self.data["monthly_totals"][meter.meter_type.name]["usage"] = sum_usage

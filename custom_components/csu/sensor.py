@@ -2,15 +2,15 @@
 
 import logging
 
-from homeassistant.components.sensor import SensorDeviceClass, SensorEntity # type: ignore
-from homeassistant.const import UnitOfEnergy, UnitOfVolume # type: ignore
-from homeassistant.core import HomeAssistant # type: ignore
-from homeassistant.helpers.typing import StateType # type: ignore
+from homeassistant.components.sensor import SensorDeviceClass, SensorEntity  # type: ignore
+from homeassistant.const import UnitOfEnergy, UnitOfVolume  # type: ignore
+from homeassistant.core import HomeAssistant  # type: ignore
+from homeassistant.helpers.typing import StateType  # type: ignore
 
 from .const import DOMAIN
-from .entity import CSUEntity
 from .coordinator import CsuCoordinator
 from .csu import MeterType
+from .entity import CSUEntity
 
 _LOGGER = logging.getLogger(__name__)
 

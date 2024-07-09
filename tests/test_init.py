@@ -1,22 +1,22 @@
 """Test HA COS Utilities setup process."""
-import pytest # type: ignore
-from custom_components.ha_cos_utilities import ( # type: ignore
+import pytest  # type: ignore
+from custom_components.ha_cos_utilities import (  # type: ignore
     async_reload_entry,
 )
-from custom_components.ha_cos_utilities import ( # type: ignore
+from custom_components.ha_cos_utilities import (  # type: ignore
     async_setup_entry,
 )
-from custom_components.ha_cos_utilities import ( # type: ignore
+from custom_components.ha_cos_utilities import (  # type: ignore
     async_unload_entry,
 )
-from custom_components.ha_cos_utilities import ( # type: ignore
+from custom_components.ha_cos_utilities import (  # type: ignore
     CSUDataUpdateCoordinator,
 )
-from custom_components.ha_cos_utilities.const import ( # type: ignore
+from custom_components.ha_cos_utilities.const import (  # type: ignore
     DOMAIN,
 )
-from homeassistant.exceptions import ConfigEntryNotReady # type: ignore
-from pytest_homeassistant_custom_component.common import MockConfigEntry # type: ignore
+from homeassistant.exceptions import ConfigEntryNotReady  # type: ignore
+from pytest_homeassistant_custom_component.common import MockConfigEntry  # type: ignore
 
 from .const import MOCK_CONFIG
 

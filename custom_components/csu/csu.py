@@ -281,7 +281,7 @@ class CSU:
         DEN = tz.gettz(TIME_ZONE)
 
         # Home Assistant recorder will only allow hourly updates. We aggregate the 15m reads to hourly here.
-        if meter.meter_type == MeterType.ELEC and aggregate_type == AggregateType.HOUR :
+        if meter.meter_type == MeterType.ELEC and aggregate_type == AggregateType.HOUR:
             aggConsumption = 0.0
             for read in reads:
                 if read[meterReadField] is not None:
