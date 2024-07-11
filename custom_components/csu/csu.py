@@ -88,6 +88,7 @@ class Meter:
     service_number: str
     service_id: str
     contract_num: str
+    contract_account_number: str
     meter_type: MeterType
     read_resolution: ReadResolution | None = None
 
@@ -106,6 +107,7 @@ class UsageRead:
 class CostRead:
     """A read from the meter that has both consumption and cost data."""
 
+    meter: Meter
     start_time: datetime
     end_time: datetime
     consumption: float  # taken from value field, in KWH or CCF
@@ -232,6 +234,7 @@ class CSU:
                             service_number=meter["serviceNumber"],
                             service_id=meter["serviceId"],
                             contract_num=meter["serviceContract"],
+                            contract_account_number=meter["contractAccountNumber"],
                             meter_type=meterType,
                             read_resolution=readFrequency,
                         )
@@ -241,6 +244,45 @@ class CSU:
             if err.status in (401, 403):
                 raise InvalidAuth(err) from err
             raise CannotConnect(err) from err
+
+    async def async_get_bill_history(
+        self,
+        meter: Meter,
+    ) -> list[CostRead]:
+        """Get Billing History for a Meter"""
+
+        
+        reads = await self._async_fetch(
+            meter=meter,
+            url="https://myaccount.csu.org/rest/usage/",
+            body={
+                "customerId": meter.customer.customer_id,
+                "serviceId": meter.service_id,
+                "accountContext": {
+                    "serviceId": meter.contract_num, # servicecontract
+                    "accountNumber": meter.contract_account_number, # contractaccountnumber
+                },
+            }
+        )
+        
+        result = []
+
+        for read in reads:
+            end_date = datetime.strptime(read["chargeDateRaw"], "%d-%b-%Y")
+            start_date = end_date - timedelta(days=int(read["daysOfService"]))
+            consumption = read["rawBilledConsumption"]
+            cost = read["billedCharge"]
+            result.append(
+                CostRead(
+                    meter=meter,
+                    start_time=start_date,
+                    end_time=end_date,
+                    consumption=consumption,
+                    provided_cost=cost,
+                )
+            )
+
+        return result
 
     async def async_get_usage_reads(
         self,
@@ -391,15 +433,19 @@ class CSU:
         url: str,
         start_date: datetime | arrow.Arrow | None = None,
         end_date: datetime | arrow.Arrow | None = None,
+        body: dict | None = None,
     ) -> list[Any]:
-        data = {
-            "customerId": meter.customer.customer_id,
-            "meterNumber": meter.meter_number,
-            "serviceNumber": meter.service_number,
-            "serviceId": meter.service_id,
-            "accountContext": meter.customer.customer_context,
-            "contractNum": meter.contract_num,
-        }
+        if not body:
+            data = {
+                "customerId": meter.customer.customer_id,
+                "meterNumber": meter.meter_number,
+                "serviceNumber": meter.service_number,
+                "serviceId": meter.service_id,
+                "accountContext": meter.customer.customer_context,
+                "contractNum": meter.contract_num,
+            }
+        else:
+            data = body
         headers = self._get_headers()
         headers["Content-Type"] = "application/json"
 

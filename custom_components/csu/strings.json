@@ -17,5 +17,21 @@
     "abort": {
       "already_configured": "[%key:common::config_flow::abort::already_configured_device%]"
     }
+  },
+  "options": {
+    "step": {
+      "options": {
+        "title": "[%key:common::config_flow::title%]",
+        "data": {
+          "electric_rate_per_kwh": "Electric rate per kWh",
+          "electric_rate_per_day": "Electric rate per day",
+          "gas_rate_per_ccf": "Gas rate per CCF",
+          "gas_rate_per_day": "Gas rate per day",
+          "water_rate_per_cf": "Water rate per CF",
+          "water_rate_per_day": "Water rate per day"
+        },
+        "description": "[%key:common::config_flow::activities::description%]"
+      }
+    }
   }
 }

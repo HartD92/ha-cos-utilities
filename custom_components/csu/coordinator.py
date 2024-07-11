@@ -52,7 +52,7 @@ class CsuCoordinator(DataUpdateCoordinator[dict[str, UsageRead]]):
             hass,
             _LOGGER,
             name="Csu",
-            update_interval=timedelta(hours=12),
+            update_interval=timedelta(minutes=5), # TODO: Change to 12 Hours when testing is done.
         )
         self.api = CSU(
             aiohttp_client.async_get_clientsession(hass),
@@ -62,9 +62,9 @@ class CsuCoordinator(DataUpdateCoordinator[dict[str, UsageRead]]):
         self.entities = []
         self.data = {
             "monthly_totals": {
-                "ELEC": {"usage": None},
-                "GAS": {"usage": None},
-                "WATER": {"usage": None},
+                "ELEC": {"usage": None, "cost": None},
+                "GAS": {"usage": None, "cost": None},
+                "WATER": {"usage": None, "cost": None},
             }
         }
 
@@ -74,7 +74,7 @@ class CsuCoordinator(DataUpdateCoordinator[dict[str, UsageRead]]):
 
         self.async_add_listener(_dummy_listener)
 
-    async def _async_update_data(self):
+    async def _async_update_data(self) -> dict[str, Any]:
         """Fetch data from CSU."""
 
         try:
@@ -82,8 +82,6 @@ class CsuCoordinator(DataUpdateCoordinator[dict[str, UsageRead]]):
         except InvalidAuth as err:
             raise ConfigEntryAuthFailed from err
         # TODO: Usage Reads works great, but for useful sensors we need to take that data and get current bill usage.
-        # Update config flow to add in a field for bill rollover date?
-        # We can use that date to get everything since, and get current month usage.
         # If we poll last 12 months we can get 'typical' usage and cost.
         # That will let us make the sensors.
         # usage_reads: list[UsageRead] = await self.api.async_get_usage_reads()
@@ -91,17 +89,33 @@ class CsuCoordinator(DataUpdateCoordinator[dict[str, UsageRead]]):
         if not self.api.meters:
             await self.api.async_get_meters()
         for meter in self.api.meters:
-            start_time = datetime.today().replace(day=1)
+            bill_reads = await self.api.async_get_bill_history(meter)
+            last_read = bill_reads.pop()
+            # start_time = datetime.today().replace(day=1)
+            start_time = last_read.end_time + timedelta(days=1)
             end_time = datetime.today()
             sum_usage = 0.0
+            
             usage_reads = await self.api.async_get_usage_reads(
                 meter, AggregateType.DAY, start_time, end_time
                 )
             for usage_read in usage_reads:
                 sum_usage += usage_read.consumption
+            _LOGGER.debug("Updating montly total data for %s with: %s",meter.meter_type.name , sum_usage)
             self.data["monthly_totals"][meter.meter_type.name]["usage"] = sum_usage
-
+            match meter.meter_type:
+                case MeterType.ELEC:
+                     total_cost = sum_usage * self.config_entry.options.get("electric_rate_per_kwh", 0.0)
+                     total_cost = total_cost + (len(usage_reads) * self.config_entry.options.get("electric_rate_per_day", 0.0))
+                case MeterType.GAS:
+                    total_cost = sum_usage * self.config_entry.options.get("gas_rate_per_ccf", 0.0)
+                    total_cost = total_cost + (len(usage_reads) * self.config_entry.options.get("gas_rate_per_day", 0.0))
+                case MeterType.WATER:
+                     total_cost = sum_usage * self.config_entry.options.get("water_rate_per_cf", 0.0)
+                     total_cost = total_cost + (len(usage_reads) * self.config_entry.options.get("water_rate_per_day", 0.0))
+            self.data["monthly_totals"][meter.meter_type.name]["cost"] = total_cost
         await self._insert_statistics()
+        return self.data
 
     async def _insert_statistics(self) -> None:
         """Insert CSU Statistics."""
