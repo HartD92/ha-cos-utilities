@@ -1,5 +1,4 @@
 """Base entity for CSU Integration"""
-
 from homeassistant.core import HomeAssistant  # type: ignore
 from homeassistant.helpers.device_registry import DeviceInfo  # type: ignore
 from homeassistant.helpers.update_coordinator import CoordinatorEntity  # type: ignore
@@ -10,7 +9,7 @@ from .coordinator import CsuCoordinator
 
 async def async_setup_entry(hass: HomeAssistant, config_entry):
     """Add sensors for passed config_entry in HA."""
-    coordinator = CsuCoordinator(hass, config_entry)
+    # coordinator = CsuCoordinator(hass, config_entry)
 
 
 class CSUEntity(CoordinatorEntity[CsuCoordinator]):

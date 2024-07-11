@@ -16,10 +16,9 @@
 
 **This component will set up the following platforms.**
 
-| Platform        | Description                                                               |
-| --------------- | ------------------------------------------------------------------------- |
-| `sensor`        | Show info from Colorado Springs Utilities API. |
-
+| Platform | Description                                    |
+| -------- | ---------------------------------------------- |
+| `sensor` | Show info from Colorado Springs Utilities API. |
 
 ![example][exampleimg]
 

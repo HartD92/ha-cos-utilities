@@ -1,5 +1,4 @@
 """The Colorado Springs Utilities integration."""
-
 from __future__ import annotations
 
 from homeassistant.config_entries import ConfigEntry  # type: ignore
@@ -31,6 +30,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass.data[DOMAIN].pop(entry.entry_id)
 
     return unload_ok
+
 
 async def update_listener(hass: HomeAssistant, entry: ConfigEntry):
     """Update Listener."""

@@ -1,5 +1,4 @@
 """Colorado Springs Utilities API."""
-
 import dataclasses
 import json
 import logging
@@ -251,7 +250,6 @@ class CSU:
     ) -> list[CostRead]:
         """Get Billing History for a Meter"""
 
-        
         reads = await self._async_fetch(
             meter=meter,
             url="https://myaccount.csu.org/rest/usage/",
@@ -259,12 +257,12 @@ class CSU:
                 "customerId": meter.customer.customer_id,
                 "serviceId": meter.service_id,
                 "accountContext": {
-                    "serviceId": meter.contract_num, # servicecontract
-                    "accountNumber": meter.contract_account_number, # contractaccountnumber
+                    "serviceId": meter.contract_num,  # servicecontract
+                    "accountNumber": meter.contract_account_number,  # contractaccountnumber
                 },
-            }
+            },
         )
-        
+
         result = []
 
         for read in reads:

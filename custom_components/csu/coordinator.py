@@ -1,5 +1,4 @@
 """Coordinator for CSU data."""
-
 import logging
 from datetime import datetime
 from datetime import timedelta
@@ -18,8 +17,8 @@ from homeassistant.const import CONF_PASSWORD  # type: ignore
 from homeassistant.const import CONF_USERNAME  # type: ignore
 from homeassistant.const import UnitOfEnergy  # type: ignore
 from homeassistant.const import UnitOfVolume  # type: ignore
-from homeassistant.core import HomeAssistant  # type: ignore
 from homeassistant.core import callback  # type: ignore
+from homeassistant.core import HomeAssistant  # type: ignore
 from homeassistant.exceptions import ConfigEntryAuthFailed  # type: ignore
 from homeassistant.helpers import aiohttp_client  # type: ignore
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator  # type: ignore
@@ -27,8 +26,8 @@ from homeassistant.util import dt as dt_util  # type: ignore
 
 from .const import DOMAIN
 from .const import TIME_ZONE
-from .csu import CSU
 from .csu import AggregateType
+from .csu import CSU
 from .csu import Meter
 from .csu import MeterType
 from .csu import ReadResolution
@@ -52,7 +51,9 @@ class CsuCoordinator(DataUpdateCoordinator[dict[str, UsageRead]]):
             hass,
             _LOGGER,
             name="Csu",
-            update_interval=timedelta(minutes=5), # TODO: Change to 12 Hours when testing is done.
+            update_interval=timedelta(
+                minutes=5
+            ),  # TODO: Change to 12 Hours when testing is done.
         )
         self.api = CSU(
             aiohttp_client.async_get_clientsession(hass),
@@ -95,24 +96,43 @@ class CsuCoordinator(DataUpdateCoordinator[dict[str, UsageRead]]):
             start_time = last_read.end_time + timedelta(days=1)
             end_time = datetime.today()
             sum_usage = 0.0
-            
+
             usage_reads = await self.api.async_get_usage_reads(
                 meter, AggregateType.DAY, start_time, end_time
-                )
+            )
             for usage_read in usage_reads:
                 sum_usage += usage_read.consumption
-            _LOGGER.debug("Updating montly total data for %s with: %s",meter.meter_type.name , sum_usage)
+            _LOGGER.debug(
+                "Updating montly total data for %s with: %s",
+                meter.meter_type.name,
+                sum_usage,
+            )
             self.data["monthly_totals"][meter.meter_type.name]["usage"] = sum_usage
             match meter.meter_type:
                 case MeterType.ELEC:
-                     total_cost = sum_usage * self.config_entry.options.get("electric_rate_per_kwh", 0.0)
-                     total_cost = total_cost + (len(usage_reads) * self.config_entry.options.get("electric_rate_per_day", 0.0))
+                    total_cost = sum_usage * self.config_entry.options.get(
+                        "electric_rate_per_kwh", 0.0
+                    )
+                    total_cost = total_cost + (
+                        len(usage_reads)
+                        * self.config_entry.options.get("electric_rate_per_day", 0.0)
+                    )
                 case MeterType.GAS:
-                    total_cost = sum_usage * self.config_entry.options.get("gas_rate_per_ccf", 0.0)
-                    total_cost = total_cost + (len(usage_reads) * self.config_entry.options.get("gas_rate_per_day", 0.0))
+                    total_cost = sum_usage * self.config_entry.options.get(
+                        "gas_rate_per_ccf", 0.0
+                    )
+                    total_cost = total_cost + (
+                        len(usage_reads)
+                        * self.config_entry.options.get("gas_rate_per_day", 0.0)
+                    )
                 case MeterType.WATER:
-                     total_cost = sum_usage * self.config_entry.options.get("water_rate_per_cf", 0.0)
-                     total_cost = total_cost + (len(usage_reads) * self.config_entry.options.get("water_rate_per_day", 0.0))
+                    total_cost = sum_usage * self.config_entry.options.get(
+                        "water_rate_per_cf", 0.0
+                    )
+                    total_cost = total_cost + (
+                        len(usage_reads)
+                        * self.config_entry.options.get("water_rate_per_day", 0.0)
+                    )
             self.data["monthly_totals"][meter.meter_type.name]["cost"] = total_cost
         await self._insert_statistics()
         return self.data

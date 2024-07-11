@@ -1,17 +1,15 @@
 """Config flow for Colorado Springs Utilities integration."""
-
 from __future__ import annotations
 
-from collections.abc import Mapping
 import logging
+from collections.abc import Mapping
 from typing import Any
 
 import voluptuous as vol
-
-from homeassistant.config_entries import CONN_CLASS_CLOUD_POLL  # type: ignore
 from homeassistant.config_entries import ConfigEntry  # type: ignore
 from homeassistant.config_entries import ConfigFlow  # type: ignore
 from homeassistant.config_entries import ConfigFlowResult  # type: ignore
+from homeassistant.config_entries import CONN_CLASS_CLOUD_POLL  # type: ignore
 from homeassistant.config_entries import OptionsFlow  # type: ignore
 from homeassistant.const import CONF_PASSWORD  # type: ignore
 from homeassistant.const import CONF_USERNAME  # type: ignore
@@ -19,8 +17,8 @@ from homeassistant.core import HomeAssistant  # type: ignore
 from homeassistant.helpers.aiohttp_client import async_create_clientsession  # type: ignore
 
 from .const import DOMAIN
-from .csu import CSU
 from .csu import CannotConnect
+from .csu import CSU
 from .csu import InvalidAuth
 
 _LOGGER = logging.getLogger(__name__)
@@ -55,7 +53,7 @@ async def _validate_login(
 
 class CSUConfigFlow(ConfigFlow, domain=DOMAIN):
     """Config Flow for setting up CSU."""
-    
+
     VERSION = 1
     CONNECTION_CLASS = CONN_CLASS_CLOUD_POLL
 
@@ -127,6 +125,7 @@ class CSUConfigFlow(ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
+
 class CSUOptionsFlow(OptionsFlow):
     """Options flow for the integration."""
 
@@ -135,34 +134,58 @@ class CSUOptionsFlow(OptionsFlow):
 
         self.config_entry = config_entry
         self.options = dict(config_entry.options)
-    
+
     async def async_step_init(self, user_input=None):
         """Manage the options."""
 
         return await self.async_step_options()
-    
+
     async def async_step_options(self, user_input=None):
         """Handle options step flow initiated by user."""
 
         if user_input is not None:
             self.options.update(user_input)
             return await self._update_options()
-                
+
         return self.async_show_form(
             step_id="options",
             data_schema=vol.Schema(
                 {
-                    vol.Optional("electric_rate_per_kwh", default=self.config_entry.options.get("electric_rate_per_kwh", 0.0)): float,
-                    vol.Optional("electric_rate_per_day", default=self.config_entry.options.get("electric_rate_per_day", 0.0)): float,
-                    vol.Optional("gas_rate_per_ccf", default=self.config_entry.options.get("gas_rate_per_ccf", 0.0)): float,
-                    vol.Optional("gas_rate_per_day", default=self.config_entry.options.get("gas_rate_per_day", 0.0)): float,
-                    vol.Optional("water_rate_per_cf", default=self.config_entry.options.get("water_rate_per_cf", 0.0)): float,
-                    vol.Optional("water_rate_per_day", default=self.config_entry.options.get("water_rate_per_day", 0.0)): float,
+                    vol.Optional(
+                        "electric_rate_per_kwh",
+                        default=self.config_entry.options.get(
+                            "electric_rate_per_kwh", 0.0
+                        ),
+                    ): float,
+                    vol.Optional(
+                        "electric_rate_per_day",
+                        default=self.config_entry.options.get(
+                            "electric_rate_per_day", 0.0
+                        ),
+                    ): float,
+                    vol.Optional(
+                        "gas_rate_per_ccf",
+                        default=self.config_entry.options.get("gas_rate_per_ccf", 0.0),
+                    ): float,
+                    vol.Optional(
+                        "gas_rate_per_day",
+                        default=self.config_entry.options.get("gas_rate_per_day", 0.0),
+                    ): float,
+                    vol.Optional(
+                        "water_rate_per_cf",
+                        default=self.config_entry.options.get("water_rate_per_cf", 0.0),
+                    ): float,
+                    vol.Optional(
+                        "water_rate_per_day",
+                        default=self.config_entry.options.get(
+                            "water_rate_per_day", 0.0
+                        ),
+                    ): float,
                 }
             ),
             last_step=True,
         )
-    
+
     async def _update_options(self):
         """Update config entry options."""
         return self.async_create_entry(title="", data=self.options)

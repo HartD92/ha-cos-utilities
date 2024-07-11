@@ -1,16 +1,18 @@
 """Platform for sensor integration."""
-
 import logging
 
-from homeassistant.components.sensor import SensorDeviceClass, SensorEntity  # type: ignore
-from homeassistant.const import UnitOfEnergy, UnitOfVolume  # type: ignore
+from homeassistant.components.sensor import SensorDeviceClass
+from homeassistant.components.sensor import SensorEntity
+from homeassistant.const import UnitOfEnergy
+from homeassistant.const import UnitOfVolume
 from homeassistant.core import HomeAssistant  # type: ignore
 from homeassistant.helpers.typing import StateType  # type: ignore
 
-from .const import DOMAIN
 from .coordinator import CsuCoordinator
 from .csu import MeterType
 from .entity import CSUEntity
+
+# from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -22,7 +24,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entitie
         await coordinator.api.async_login()
     if not coordinator.api.meters:
         await coordinator.api.async_get_meters()
-    # 
+    #
     async_add_entities(
         CSUSensor(coordinator, meter.meter_type) for meter in coordinator.api.meters
     )
@@ -76,6 +78,7 @@ class CSUSensor(CSUEntity, SensorEntity):
         if value == "":
             value = None
         return value
+
 
 class CSUCostSensor(CSUEntity, SensorEntity):
     """CSU Sensor Class."""
