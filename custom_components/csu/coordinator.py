@@ -9,6 +9,13 @@ from typing import cast
 from homeassistant.components.recorder import get_instance  # type: ignore
 from homeassistant.components.recorder.models import StatisticData  # type: ignore
 from homeassistant.components.recorder.models import StatisticMetaData  # type: ignore
+from homeassistant.util.unit_conversion import EnergyConverter  # type: ignore
+from homeassistant.util.unit_conversion import VolumeConverter  # type: ignore
+
+try:  # HA >= 2025.x replaced has_mean with mean_type and added unit_class
+    from homeassistant.components.recorder.models import StatisticMeanType  # type: ignore
+except ImportError:  # pragma: no cover - older Home Assistant
+    StatisticMeanType = None
 from homeassistant.components.recorder.statistics import async_add_external_statistics  # type: ignore
 from homeassistant.components.recorder.statistics import get_last_statistics  # type: ignore
 from homeassistant.components.recorder.statistics import statistics_during_period  # type: ignore
@@ -134,101 +141,103 @@ class CsuCoordinator(DataUpdateCoordinator[dict[str, UsageRead]]):
                         * self.config_entry.options.get("water_rate_per_day", 0.0)
                     )
             self.data["monthly_totals"][meter.meter_type.name]["cost"] = total_cost
-        await self._insert_statistics()
+        # The first import walks ~3 years of history; never block HA startup on it.
+        if not getattr(self, "_stats_task", None) or self._stats_task.done():
+            self._stats_task = self.hass.async_create_background_task(
+                self._insert_statistics(), "csu_insert_statistics"
+            )
         return self.data
 
     async def _insert_statistics(self) -> None:
-        """Insert CSU Statistics."""
+        """Insert CSU statistics; net-metered electric also gets an export series."""
         if not self.api.meters:
             await self.api.async_get_meters()
         for meter in self.api.meters:
             id_prefix = (
                 f"csu_{meter.meter_type.name.lower()}_{meter.customer.customer_id}"
             )
-
-            consumption_statistic_id = f"{DOMAIN}:{id_prefix}_energy_consumption"
-            _LOGGER.info(
-                "Updating Statistics for %s",
-                consumption_statistic_id,
-            )
-
-            last_stat = await get_instance(self.hass).async_add_executor_job(
-                get_last_statistics, self.hass, 1, consumption_statistic_id, True, set()
-            )
-            if not last_stat:
-                _LOGGER.info("Updating statistics for the first time")
-                usage_reads = await self._async_get_usage_reads(meter, TIME_ZONE)
-                consumption_sum = 0.0
-                last_stats_time = None
-            else:
-                usage_reads = await self._async_get_usage_reads(
-                    meter,
-                    TIME_ZONE,
-                    last_stat[consumption_statistic_id][0]["start"],
-                )
-                if not usage_reads:
-                    _LOGGER.debug("No recent usage data. Skipping update")
-                    continue
-                stats = await get_instance(self.hass).async_add_executor_job(
-                    statistics_during_period,
-                    self.hass,
-                    usage_reads[0].start_time,
-                    None,
-                    {consumption_statistic_id},
-                    (
-                        "hour"
-                        if meter.meter_type in (MeterType.ELEC, MeterType.GAS)
-                        else "day"
-                    ),
-                    None,
-                    {"sum"},
-                )
-                consumption_sum = cast(float, stats[consumption_statistic_id][0]["sum"])
-                last_stats_time = stats[consumption_statistic_id][0]["start"]
-
-            consumption_statistics = []
-
-            for usage_read in usage_reads:
-                start = usage_read.start_time
-                if last_stats_time is not None and start.timestamp() <= last_stats_time:
-                    continue
-                consumption_sum += usage_read.consumption
-
-                consumption_statistics.append(
-                    StatisticData(
-                        start=start, state=usage_read.consumption, sum=consumption_sum
-                    )
-                )
-
-            name_prefix = (
-                f"CSU {meter.meter_type.name.lower()} {meter.customer.customer_id}"
-            )
-            unit = None
+            series = [("energy_consumption", "consumption", "consumption")]
             if meter.meter_type == MeterType.ELEC:
-                unit = UnitOfEnergy.KILO_WATT_HOUR
-            elif meter.meter_type == MeterType.GAS:
-                unit = UnitOfVolume.CENTUM_CUBIC_FEET
-            elif meter.meter_type == MeterType.WATER:
-                unit = UnitOfVolume.CUBIC_FEET
-            consumption_metadata = StatisticMetaData(
-                has_mean=False,
-                has_sum=True,
-                name=f"{name_prefix} consumption",
-                source=DOMAIN,
-                statistic_id=consumption_statistic_id,
-                unit_of_measurement=unit,
+                series.append(("energy_production", "received", "returned to grid"))
+            self._reads_cache = {}
+            for suffix, attr, label in series:
+                await self._insert_series(meter, id_prefix, suffix, attr, label)
+
+    async def _cached_reads(self, meter, start_time):
+        cache = getattr(self, "_reads_cache", {})
+        # None (full history) satisfies any later-start request for the same meter
+        for (sid, st), reads in cache.items():
+            if sid == meter.service_id and (st is None or (start_time is not None and st <= start_time)):
+                return reads
+        reads = await self._async_get_usage_reads(meter, TIME_ZONE, start_time)
+        cache[(meter.service_id, start_time)] = reads
+        self._reads_cache = cache
+        return reads
+
+    async def _insert_series(self, meter, id_prefix, suffix, attr, label) -> None:
+        statistic_id = f"{DOMAIN}:{id_prefix}_{suffix}"
+        last_stat = await get_instance(self.hass).async_add_executor_job(
+            get_last_statistics, self.hass, 1, statistic_id, True, set()
+        )
+        if not last_stat:
+            _LOGGER.info("Updating statistics for the first time: %s", statistic_id)
+            usage_reads = await self._cached_reads(meter, None)
+            running_sum = 0.0
+            last_stats_time = None
+        else:
+            usage_reads = await self._cached_reads(meter, last_stat[statistic_id][0]["start"])
+            if not usage_reads:
+                return
+            stats = await get_instance(self.hass).async_add_executor_job(
+                statistics_during_period,
+                self.hass,
+                usage_reads[0].start_time,
+                None,
+                {statistic_id},
+                "hour",
+                None,
+                {"sum"},
             )
-            if valid_statistic_id(consumption_statistic_id):
-                _LOGGER.info("Statistic to insert data into: %s", consumption_metadata)
-                # _LOGGER.debug("Stats Object: %s", consumption_statistics)
-                async_add_external_statistics(
-                    self.hass, consumption_metadata, consumption_statistics
-                )
+            if stats.get(statistic_id):
+                running_sum = cast(float, stats[statistic_id][0]["sum"])
+                last_stats_time = stats[statistic_id][0]["start"]
+            else:
+                running_sum = cast(float, last_stat[statistic_id][0]["sum"])
+                last_stats_time = last_stat[statistic_id][0]["start"]
+        points = []
+        for usage_read in usage_reads:
+            start = usage_read.start_time
+            if last_stats_time is not None and start.timestamp() <= last_stats_time:
                 continue
-            _LOGGER.warning(
-                "Invalid statistic id: %s",
-                consumption_statistic_id,
+            value = getattr(usage_read, attr)
+            running_sum += value
+            points.append(StatisticData(start=start, state=value, sum=running_sum))
+        unit = {
+            MeterType.ELEC: UnitOfEnergy.KILO_WATT_HOUR,
+            MeterType.GAS: UnitOfVolume.CENTUM_CUBIC_FEET,
+            MeterType.WATER: UnitOfVolume.CUBIC_FEET,
+        }[meter.meter_type]
+        metadata = StatisticMetaData(
+            has_sum=True,
+            name=f"CSU {meter.meter_type.name.lower()} {label}",
+            source=DOMAIN,
+            statistic_id=statistic_id,
+            unit_of_measurement=unit,
+        )
+        if StatisticMeanType is not None:
+            metadata["mean_type"] = StatisticMeanType.NONE
+            metadata["unit_class"] = (
+                EnergyConverter.UNIT_CLASS
+                if meter.meter_type == MeterType.ELEC
+                else VolumeConverter.UNIT_CLASS
             )
+        else:
+            metadata["has_mean"] = False
+        if not valid_statistic_id(statistic_id):
+            _LOGGER.warning("Invalid statistic id: %s", statistic_id)
+            return
+        _LOGGER.info("Inserting %d points into %s", len(points), statistic_id)
+        async_add_external_statistics(self.hass, metadata, points)
 
     async def _async_get_usage_reads(
         self, meter: Meter, time_zone_str: str, start_time: float | None = None

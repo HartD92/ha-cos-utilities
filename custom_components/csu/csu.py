@@ -100,6 +100,7 @@ class UsageRead:
     start_time: datetime
     end_time: datetime
     consumption: float
+    received: float = 0.0  # kWh exported (net-metered ELEC only), positive
 
 
 @dataclasses.dataclass
@@ -176,6 +177,8 @@ class CSU:
                     raise InvalidAuth(result["errorMsg"])
                 # customerId = customerId
                 customerContext = result["account"][0]
+                # login() runs on every refresh; don't accumulate duplicate customers
+                self.customers = []
                 _LOGGER.info("Customer ID: %s", customerId)
                 # _LOGGER.info("Customer Context: %s", customerContext)
                 self.customers.append(
@@ -217,15 +220,20 @@ class CSU:
                 meterResult = result["accountSummaryType"]["servicesForGraph"]
                 # _LOGGER.info("Meters: %s", meterResult)
                 for meter in meterResult:
-                    if meter["serviceNumber"] == "G-TYPICAL":
+                    # Classify by prefix: accounts use E-TYPICAL/E-NET (net metering), W-TYPICAL/W-STRAIGHT, etc.
+                    svc = str(meter.get("serviceNumber") or "")
+                    if svc.startswith("G-"):
                         meterType = MeterType.GAS
                         readFrequency = ReadResolution.HOUR
-                    elif meter["serviceNumber"] == "W-TYPICAL":
+                    elif svc.startswith("W-"):
                         meterType = MeterType.WATER
                         readFrequency = ReadResolution.DAY
-                    elif meter["serviceNumber"] == "E-TYPICAL":
+                    elif svc.startswith("E-"):
                         meterType = MeterType.ELEC
                         readFrequency = ReadResolution.QUARTER_HOUR
+                    else:
+                        _LOGGER.warning("Skipping unknown CSU service type %s", svc)
+                        continue
                     self.meters.append(
                         Meter(
                             customer=self.customers[0],
@@ -309,74 +317,46 @@ class CSU:
             start_date=start_date,
             end_date=end_date,
         )
-        if aggregate_type in {AggregateType.QUARTER, AggregateType.HOUR}:
-            meterReadField = "readDateTime"
-            consumptionField = "usageConsumptionValue"
-        else:
-            meterReadField = "readDate"
-            consumptionField = "usageConsumptionValue"
-
-        result = []
-        readStart = None
+        # Key on usageDate, which is always populated. readDateTime is
+        # null for export-only (net-metered) intervals, which broke hourly bucketing and dropped
+        # export entirely. Interval labels are interval END times; daily labels are the day.
+        # Missing reads (no import and no received value) are skipped, never date-shifted.
         DEN = tz.gettz(TIME_ZONE)
-
-        # Home Assistant recorder will only allow hourly updates. We aggregate the 15m reads to hourly here.
-        if meter.meter_type == MeterType.ELEC and aggregate_type == AggregateType.HOUR:
-            aggConsumption = 0.0
-            for read in reads:
-                if read[meterReadField] is not None:
-                    if readStart is None:
-                        readStart = datetime.fromisoformat(
-                            read[meterReadField]
-                        ).replace(tzinfo=DEN) - timedelta(hours=1)
-                    if read[consumptionField] is not None:
-                        aggConsumption = aggConsumption + read[consumptionField]
-                    readEnd = datetime.fromisoformat(read[meterReadField]).replace(
-                        tzinfo=DEN
-                    )
-                    _LOGGER.debug("Processing read from %s to %s", readStart, readEnd)
-                    if readStart.minute == 45:
-                        result.append(
-                            UsageRead(
-                                meter=meter,
-                                start_time=readEnd - timedelta(hours=1),
-                                end_time=readEnd,
-                                consumption=aggConsumption,
-                            )
-                        )
-                        _LOGGER.debug(
-                            "Adding read for %s with value of %s",
-                            (readEnd - timedelta(hours=1)),
-                            aggConsumption,
-                        )
-                        aggConsumption = 0.0
-                    readStart = datetime.fromisoformat(read[meterReadField])
-        else:
-            # TODO: Need to adjust the datetime for the daily reads, it's offset by 1 day.
-            for read in reads:
-                if read[meterReadField] is not None:
-                    if readStart is None:
-                        if aggregate_type == AggregateType.DAY:
-                            readStart = datetime.fromisoformat(
-                                read[meterReadField]
-                            ).replace(tzinfo=DEN) - timedelta(days=1)
-                        elif aggregate_type == AggregateType.HOUR:
-                            readStart = datetime.fromisoformat(
-                                read[meterReadField]
-                            ).replace(tzinfo=DEN) - timedelta(hours=1)
-                    elif aggregate_type == AggregateType.DAY:
-                        readStart = readStart + timedelta(days=1)
-                    result.append(
-                        UsageRead(
-                            meter=meter,
-                            start_time=readStart.replace(tzinfo=DEN),
-                            end_time=datetime.fromisoformat(
-                                read[meterReadField]
-                            ).replace(tzinfo=DEN),
-                            consumption=read[consumptionField],
-                        )
-                    )
-                    readStart = datetime.fromisoformat(read[meterReadField])
+        seen: dict[str, dict] = {}
+        for read in reads:
+            label = read.get("usageDate")
+            if label:
+                seen[label] = read  # dedupe overlapping request windows
+        buckets: dict[datetime, list[float]] = {}
+        for label, read in seen.items():
+            imp = read.get("usageConsumptionValue")
+            rec = read.get("netReceivedValue")
+            if imp is None and rec in (None, ""):
+                continue
+            imp = float(imp or 0.0)
+            rec = -float(rec) if rec not in (None, "") else 0.0
+            if aggregate_type == AggregateType.DAY:
+                start = datetime.fromisoformat(label[:10]).replace(tzinfo=DEN)
+            else:
+                end = datetime.fromisoformat(label).replace(tzinfo=DEN)
+                step = int(read.get("intervalType") or 60)
+                start = (end - timedelta(minutes=step)).replace(minute=0)
+            bucket = buckets.setdefault(start, [0.0, 0.0])
+            bucket[0] += imp
+            bucket[1] += rec
+        result = []
+        span = timedelta(days=1) if aggregate_type == AggregateType.DAY else timedelta(hours=1)
+        for start in sorted(buckets):
+            imp, rec = buckets[start]
+            result.append(
+                UsageRead(
+                    meter=meter,
+                    start_time=start,
+                    end_time=start + span,
+                    consumption=round(imp, 4),
+                    received=round(rec, 4),
+                )
+            )
         return result
 
     async def async_get_dated_data(
